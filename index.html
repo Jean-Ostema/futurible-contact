@@ -11,7 +11,7 @@
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Futurible Contact</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root {
     --azul: #0a4ea3; --azul2: #123c7a; --cian: #3ec8d6; --violeta: #7c5cff; --rosa: #ff6fa3;
@@ -425,6 +425,7 @@
 
   // ---------- Gráficos ----------
   function dibujar(id, tipo, etiquetas, valores, opciones) {
+    if (typeof Chart === 'undefined') return;
     if (graficos[id]) graficos[id].destroy();
     const ctx = $(id).getContext('2d');
     const base = {
@@ -565,6 +566,7 @@
   }
 
   mostrarPantalla();
+  window.addEventListener('load', function () { if (localStorage.getItem(CLAVE_KEY)) pintarTodo(); });
 </script>
 </body>
 </html>
