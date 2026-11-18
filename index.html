@@ -453,7 +453,7 @@
     graficos[id] = new Chart(ctx, cfg);
   }
 
-  function top(lista, n) { return lista.slice(0, n); }
+  function topN(lista, n) { return lista.slice(0, n); }
 
   function pintarGraficos(lista) {
     const tipos = contar(lista, 'tipo');
@@ -465,16 +465,16 @@
     const valE = etqE.map((e) => ce.find((x) => x.k === e).n);
     dibujar('cEstado', 'bar', etqE.length ? etqE : ['Sin datos'], valE.length ? valE : [0], { indexAxis: 'y' });
 
-    const paises = top(contar(lista, 'pais'), 10);
+    const paises = topN(contar(lista, 'pais'), 10);
     dibujar('cPais', 'bar', paises.map((x) => x.k), paises.map((x) => x.n), { indexAxis: 'y' });
 
-    const ciudades = top(contar(lista, 'ciudad'), 10);
+    const ciudades = topN(contar(lista, 'ciudad'), 10);
     dibujar('cCiudad', 'bar', ciudades.map((x) => x.k), ciudades.map((x) => x.n), { indexAxis: 'y' });
 
-    const cargos = top(contar(lista, 'cargo'), 10);
+    const cargos = topN(contar(lista, 'cargo'), 10);
     dibujar('cCargo', 'bar', cargos.map((x) => x.k), cargos.map((x) => x.n), { indexAxis: 'y' });
 
-    const sectores = top(contar(lista, 'sector'), 10);
+    const sectores = topN(contar(lista, 'sector'), 10);
     dibujar('cSector', 'bar', sectores.map((x) => x.k), sectores.map((x) => x.n), { indexAxis: 'y' });
 
     const prio = contar(lista, 'prioridad');
