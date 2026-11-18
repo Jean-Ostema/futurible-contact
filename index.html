@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#9dc3f8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Futurible">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Futurible Contact</title>
+<style>
+  :root { --azul: #0a4ea3; --fondo: #9dc3f8; --claro: #eef6ff; --cian: #3ec8d6; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--fondo); color: var(--azul); min-height: 100vh; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; }
+  header { text-align: center; }
+  header img { width: 220px; max-width: 70%; height: auto; }
+  h1 { font-size: 1.2rem; margin: 4px 0 16px; letter-spacing: .5px; text-align: center; }
+  form, .panel { background: var(--claro); border-radius: 18px; padding: 18px; box-shadow: 0 6px 18px rgba(10,78,163,.18); }
+  label { display: block; font-size: .85rem; font-weight: 600; margin: 12px 0 4px; }
+  label span.req { color: #c0392b; }
+  input, textarea { width: 100%; padding: 11px 12px; font-size: 16px; border: 1.5px solid #b8d4f5; border-radius: 10px; background: #fff; color: #1b2b44; font-family: inherit; }
+  input:focus, textarea:focus { outline: none; border-color: var(--cian); box-shadow: 0 0 0 3px rgba(62,200,214,.25); }
+  textarea { min-height: 70px; resize: vertical; }
+  button { width: 100%; margin-top: 18px; padding: 14px; font-size: 1rem; font-weight: 700; border: none; border-radius: 12px; background: var(--azul); color: #fff; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  button.sec { background: #fff; color: var(--azul); border: 1.5px solid var(--azul); margin-top: 10px; }
+  .msg { margin-top: 14px; padding: 12px; border-radius: 10px; text-align: center; font-weight: 600; display: none; }
+  .msg.ok { display: block; background: #d7f5e3; color: #17663a; }
+  .msg.error { display: block; background: #fbdcdc; color: #8b1e1e; }
+  .pie { text-align: center; font-size: .8rem; margin-top: 16px; opacity: .8; }
+  .oculto { display: none !important; }
+  .ajustes { text-align: right; margin-top: 12px; }
+  .ajustes a { color: var(--azul); font-size: .85rem; cursor: pointer; text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="logo.png" alt="Futurible - Futuro Posible">
+  </header>
+
+  <!-- Primera vez: pide la clave de acceso (se guarda solo en este dispositivo) -->
+  <div id="panelClave" class="panel oculto">
+    <h1>Primera vez</h1>
+    <label for="clave">Clave de acceso</label>
+    <input id="clave" type="password" autocomplete="off">
+    <button id="guardarClave" type="button">Entrar</button>
+    <div id="msgClave" class="msg"></div>
+  </div>
+
+  <div id="panelForm" class="oculto">
+    <h1>Registrar contacto</h1>
+    <form id="f" autocomplete="off">
+      <label for="nombre">Nombre completo <span class="req">*</span></label>
+      <input id="nombre" name="nombre" required>
+      <label for="cargo">Cargo</label>
+      <input id="cargo" name="cargo">
+      <label for="empresa">Empresa u organización</label>
+      <input id="empresa" name="empresa">
+      <label for="correo">Correo</label>
+      <input id="correo" name="correo" type="email" inputmode="email">
+      <label for="telefono">Teléfono</label>
+      <input id="telefono" name="telefono" type="tel" inputmode="tel">
+      <label for="ciudad">Ciudad o país</label>
+      <input id="ciudad" name="ciudad">
+      <label for="area">Área o rubro</label>
+      <input id="area" name="area" placeholder="Ej: educación, emprendimiento">
+      <label for="como">Cómo nos conocimos</label>
+      <input id="como" name="como">
+      <label for="notas">Notas</label>
+      <textarea id="notas" name="notas"></textarea>
+      <button id="btn" type="submit">Guardar contacto</button>
+      <div id="msg" class="msg"></div>
+    </form>
+    <div class="ajustes"><a id="cambiarClave">Cambiar clave</a></div>
+  </div>
+
+  <p class="pie">Los contactos se guardan en la hoja "Futurible Contactos" de tu Drive.</p>
+</div>
+
+<script>
+  // Dirección de la API (Apps Script). No es secreta: la protección es la clave.
+  const API_URL = 'https://script.google.com/macros/s/AKfycbzNuje5GxyE_GnHgFr4Ygsxzmm_Jz85zR_bCKaC0qMeDkvZz0v37tldVcWx0W1o1uaV/exec';
+  const CLAVE_KEY = 'futurible-clave';
+
+  const $ = (id) => document.getElementById(id);
+
+  function mostrar(el, texto, tipo) { el.textContent = texto; el.className = 'msg ' + tipo; }
+
+  function mostrarPantalla() {
+    const tieneClave = !!localStorage.getItem(CLAVE_KEY);
+    $('panelClave').classList.toggle('oculto', tieneClave);
+    $('panelForm').classList.toggle('oculto', !tieneClave);
+  }
+
+  $('guardarClave').addEventListener('click', function () {
+    const v = $('clave').value.trim();
+    if (!v) { mostrar($('msgClave'), 'Escribe la clave.', 'error'); return; }
+    localStorage.setItem(CLAVE_KEY, v);
+    $('clave').value = '';
+    mostrarPantalla();
+  });
+
+  $('cambiarClave').addEventListener('click', function () {
+    localStorage.removeItem(CLAVE_KEY);
+    mostrarPantalla();
+  });
+
+  $('f').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const btn = $('btn');
+    const datos = {};
+    new FormData($('f')).forEach(function (v, k) { datos[k] = String(v).trim(); });
+    if (!datos.nombre) { mostrar($('msg'), 'Escribe al menos el nombre.', 'error'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+    $('msg').className = 'msg';
+    try {
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ clave: localStorage.getItem(CLAVE_KEY), contacto: datos })
+      });
+      const res = await r.json();
+      if (res.ok) {
+        mostrar($('msg'), 'Contacto guardado. ¡Listo!', 'ok');
+        $('f').reset();
+        $('nombre').focus();
+      } else if (res.error === 'clave') {
+        mostrar($('msg'), 'Clave incorrecta. Usa "Cambiar clave" y vuelve a intentarlo.', 'error');
+      } else {
+        mostrar($('msg'), 'No se pudo guardar: ' + (res.error || 'error desconocido'), 'error');
+      }
+    } catch (err) {
+      mostrar($('msg'), 'Sin conexión o error de red. Intenta de nuevo con internet.', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Guardar contacto';
+    }
+  });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js'); });
+  }
+
+  mostrarPantalla();
+</script>
+</body>
+</html>
