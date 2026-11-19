@@ -1,4 +1,4 @@
-const CACHE = 'futurible-v3';
+const CACHE = 'futurible-v4';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './logo.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -16,5 +16,5 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
     fetch(e.request).catch(() => caches.match(e.request).then((r) => r || caches.match('./index.html')))
-    );
+  );
 });
