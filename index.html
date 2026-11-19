@@ -149,10 +149,15 @@
   <div id="panelEntrar" class="card oculto" style="max-width:460px;margin:30px auto;">
     <h2>🔒 Futurible Contact</h2>
     <p class="dato" style="margin:0 0 6px;">Escribe tu clave para entrar. Sin la clave, los datos de este equipo no se pueden ver.</p>
-    <label for="claveEntrar">Clave</label>
-    <input id="claveEntrar" type="password" autocomplete="current-password">
-    <button id="btnEntrar" class="principal" type="button">Entrar</button>
-    <button id="btnHuella" class="sec oculto" type="button" style="width:100%;margin-top:10px;padding:12px;">👆 Entrar con huella</button>
+    <div id="bloqueClave">
+      <label for="claveEntrar">Clave</label>
+      <input id="claveEntrar" type="password" autocomplete="current-password">
+      <button id="btnEntrar" class="principal" type="button">Entrar</button>
+    </div>
+    <button id="btnHuella" class="principal oculto" type="button">👆 Entrar con huella</button>
+    <button id="usarClave" class="sec oculto" type="button" style="width:100%;margin-top:10px;">Usar la clave en vez de la huella</button>
+    <p class="dato" style="margin:14px 0 0;text-align:center;">¿No recuerdas tu clave?
+      <button id="resetLocal" type="button" style="background:none;border:0;color:var(--azul);text-decoration:underline;cursor:pointer;font-weight:700;">Borrar datos de este equipo y crear una clave nueva</button></p>
     <div id="msgEntrar" class="msg"></div>
   </div>
 
@@ -432,7 +437,7 @@
       </div>
     </section>
 
-    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v7</span><br>
+    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v9</span><br>
       <button id="actualizarApp" class="sec" type="button" style="margin-top:8px;">🔄 Actualizar aplicación</button>
       <button id="activarHuella" class="sec" type="button" style="margin-top:8px;">👆 Activar huella en este equipo</button>
       <button id="cambiarClave" type="button">Cambiar clave</button></p>
@@ -451,6 +456,8 @@
   let llaveCifrado = null;  // llave AES derivada de la clave
   let ocultoDesde = 0;
   const HUELLA_KEY = 'futurible-huella-v5';  // clave guardada, cifrada con la huella del equipo
+  let modoClave = false;          // true si el usuario eligió escribir la clave en vez de la huella
+  let autoHuellaIntentada = false; // para pedir la huella una vez al bloquear
 
   // ---------- Huella (WebAuthn + PRF) ----------
   function huellaDisponible() { return !!(window.PublicKeyCredential && navigator.credentials && window.isSecureContext); }
@@ -516,7 +523,7 @@
       await entrarCon(clave);
     } catch (e) {
       if (e.name === 'NotAllowedError') mostrar(msg, 'Huella cancelada. Puedes usar tu clave.', 'aviso');
-      else mostrar(msg, 'No se pudo con la huella. Usa tu clave.', 'error');
+      else mostrar(msg, 'No se pudo con la huella. Pulsa "Usar la clave en vez de la huella".', 'error');
     }
   }
 
@@ -727,6 +734,7 @@
   // Bloquea la app: borra de la memoria la clave y los datos. Lo guardado queda cifrado.
   function bloquear(mensaje) {
     claveActiva = ''; llaveCifrado = null;
+    modoClave = false; autoHuellaIntentada = false;
     datos = { contacto: [], miembro: [] }; cola = [];
     $('app').classList.add('oculto');
     $('panelCambiar').classList.add('oculto');
@@ -756,9 +764,18 @@
     const hayDatos = !!leerBloque();
     $('panelEntrar').classList.toggle('oculto', !hayDatos);
     $('panelCrear').classList.toggle('oculto', hayDatos);
-    $('btnHuella').classList.toggle('oculto', !(hayDatos && huellaDisponible() && localStorage.getItem(HUELLA_KEY)));
+    // Si la huella está activada en este equipo, la entrada es solo con huella (la clave queda como respaldo).
+    const soloHuella = hayDatos && huellaDisponible() && !!localStorage.getItem(HUELLA_KEY);
+    $('btnHuella').classList.toggle('oculto', !soloHuella);
+    $('bloqueClave').classList.toggle('oculto', soloHuella && !modoClave);
+    $('usarClave').classList.toggle('oculto', !soloHuella || modoClave);
     $('activarHuella').classList.toggle('oculto', !huellaDisponible());
-    if (hayDatos) setTimeout(() => $('claveEntrar').focus(), 50);
+    if (soloHuella && !modoClave && !autoHuellaIntentada) {
+      autoHuellaIntentada = true;
+      setTimeout(entrarConHuella, 400);
+    } else if (hayDatos && !soloHuella) {
+      setTimeout(() => $('claveEntrar').focus(), 50);
+    }
   }
 
   // Al abrir la app: primero entra con la clave; luego sincroniza.
@@ -1442,6 +1459,14 @@
     pintarListaMiembros(lista);
   }
 
+  // Borra solo lo cifrado de este equipo. Los contactos siguen en la hoja de Drive.
+  $('resetLocal').addEventListener('click', () => {
+    if (!confirm('Se borrarán los datos guardados en este equipo (los que estén sin enviar a Drive se perderán). Los contactos ya guardados siguen en la hoja de Drive. ¿Continuar?')) return;
+    [BLOQUE_KEY, SAL_KEY, HUELLA_KEY, INTENTOS_KEY, COLA_KEY, DATOS_KEY].forEach((k) => localStorage.removeItem(k));
+    LEGADO_KEYS.forEach((k) => localStorage.removeItem(k));
+    mostrarPantalla();
+  });
+  $('usarClave').addEventListener('click', () => { modoClave = true; mostrarPantalla(); });
   $('btnHuella').addEventListener('click', entrarConHuella);
   $('activarHuella').addEventListener('click', activarHuella);
 
