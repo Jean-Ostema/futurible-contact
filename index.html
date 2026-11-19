@@ -432,7 +432,7 @@
       </div>
     </section>
 
-    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v6</span><br>
+    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v7</span><br>
       <button id="actualizarApp" class="sec" type="button" style="margin-top:8px;">🔄 Actualizar aplicación</button>
       <button id="activarHuella" class="sec" type="button" style="margin-top:8px;">👆 Activar huella en este equipo</button>
       <button id="cambiarClave" type="button">Cambiar clave</button></p>
@@ -536,8 +536,6 @@
     mostrarPantalla();
     abrirApp();
   }
-  $('btnHuella').addEventListener('click', entrarConHuella);
-  $('activarHuella').addEventListener('click', activarHuella);
   const PALETA = ['#0a4ea3', '#3ec8d6', '#7c5cff', '#ff6fa3', '#ffb703', '#2fbf8f', '#f3722c', '#577590', '#90be6d', '#b5179e'];
   const ESTADOS_CONTACTO = ['Por contactar', 'Contactado', 'En conversación', 'Colaborador activo', 'Descartado'];
   const PRIORIDAD_ORDEN = { Alta: 0, Media: 1, Baja: 2 };
@@ -1443,6 +1441,9 @@
     dibujar('cMEstado', 'bar', estados.map((x) => x.k), estados.map((x) => x.n), { indexAxis: 'y' });
     pintarListaMiembros(lista);
   }
+
+  $('btnHuella').addEventListener('click', entrarConHuella);
+  $('activarHuella').addEventListener('click', activarHuella);
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js'); });

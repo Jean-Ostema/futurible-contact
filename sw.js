@@ -1,4 +1,4 @@
-const CACHE = 'futurible-v6';
+const CACHE = 'futurible-v7';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './logo.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {
