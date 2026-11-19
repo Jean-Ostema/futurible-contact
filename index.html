@@ -832,7 +832,7 @@
   // Si la app pasa más de 2 minutos en segundo plano, vuelve a pedir la clave.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { ocultoDesde = Date.now(); return; }
-    if (llaveCifrado && ocultoDesde && Date.now() - ocultoDesde > 120000) {
+    if (llaveCifrado && ocultoDesde && Date.now() - ocultoDesde > 900000) {
       bloquear('Por seguridad, vuelve a escribir tu clave.');
     }
   });
