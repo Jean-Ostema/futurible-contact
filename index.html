@@ -265,6 +265,19 @@
             <option>Alemania</option><option>Italia</option><option>Reino Unido</option><option>China</option><option>Otro</option>
           </datalist>
 
+          <div class="seccion">Datos adicionales</div>
+          <div class="grid2">
+            <div><label for="contacto-rut">RUT (opcional)</label><input id="contacto-rut" name="rut" placeholder="12.345.678-5"></div>
+            <div><label for="contacto-interes">Interés principal</label>
+              <select id="contacto-interes" name="interes">
+                <option value="">Selecciona…</option><option>Emprendimiento</option><option>Tecnología</option>
+                <option>Desarrollo personal</option><option>Formación para grupos</option>
+                <option>Donación o patrocinio</option><option>Otro</option>
+              </select></div>
+          </div>
+          <label for="contacto-proxima">Próxima acción (qué hacer y para cuándo)</label>
+          <input id="contacto-proxima" name="proxima" placeholder="Ej: llamar el 5 de diciembre">
+
           <div class="seccion">Relación</div>
           <div class="grid3">
             <div><label for="contacto-estado">Estado</label>
@@ -386,6 +399,11 @@
             <div><label for="miembro-telefono">Teléfono (con código de país)</label><input id="miembro-telefono" name="telefono" type="tel" inputmode="tel" placeholder="+56 9 1234 5678"></div>
           </div>
 
+          <div class="seccion">Identificación (opcional)</div>
+          <div class="grid2">
+            <div><label for="miembro-rut">RUT (opcional)</label><input id="miembro-rut" name="rut" placeholder="12.345.678-5"></div>
+          </div>
+
           <div class="seccion">Ubicación y pertenencia</div>
           <div class="grid2">
             <div><label for="miembro-pais">País</label><input id="miembro-pais" name="pais" list="listaPaises" placeholder="Ej: Chile"></div>
@@ -437,7 +455,7 @@
       </div>
     </section>
 
-    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v9</span><br>
+    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v10</span><br>
       <button id="actualizarApp" class="sec" type="button" style="margin-top:8px;">🔄 Actualizar aplicación</button>
       <button id="activarHuella" class="sec" type="button" style="margin-top:8px;">👆 Activar huella en este equipo</button>
       <button id="cambiarClave" type="button">Cambiar clave</button></p>
@@ -550,16 +568,17 @@
   const CONF = {
     contacto: {
       nombre: 'Contacto',
-      campos: ['nombre', 'tipo', 'cargo', 'empresa', 'sector', 'correo', 'telefono', 'pais', 'ciudad', 'web', 'estado', 'prioridad', 'ultimo', 'como', 'notas'],
+      campos: ['nombre', 'tipo', 'cargo', 'empresa', 'sector', 'correo', 'telefono', 'pais', 'ciudad', 'web', 'estado', 'prioridad', 'ultimo', 'como', 'notas', 'rut', 'interes', 'proxima'],
       defectos: { estado: 'Por contactar', prioridad: 'Media' }
     },
     miembro: {
       nombre: 'Miembro',
-      campos: ['nombre', 'rol', 'cargo', 'institucion', 'area', 'correo', 'telefono', 'pais', 'ciudad', 'estado', 'ingreso', 'notas'],
+      campos: ['nombre', 'rol', 'cargo', 'institucion', 'area', 'correo', 'telefono', 'pais', 'ciudad', 'estado', 'ingreso', 'notas', 'rut'],
       defectos: { estado: 'Activo' }
     }
   };
   const ALIAS_CSV = {
+    'rut': 'rut', 'interes': 'interes', 'interes principal': 'interes', 'proxima': 'proxima', 'proxima accion': 'proxima',
     'nombre': 'nombre', 'nombre completo': 'nombre', 'tipo': 'tipo', 'tipo de contacto': 'tipo',
     'cargo': 'cargo', 'empresa': 'empresa', 'empresa u organizacion': 'empresa', 'sector': 'sector',
     'sector o area': 'sector', 'correo': 'correo', 'email': 'correo', 'telefono': 'telefono', 'pais': 'pais',
@@ -580,6 +599,28 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
   function mostrar(el, texto, tipo) { el.textContent = texto; el.className = 'msg ' + tipo; }
   function limpio(v) { return String(v == null ? '' : v).trim(); }
+  // Búsqueda: ignora tildes, mayúsculas, puntos y guiones; cada palabra debe aparecer en algún campo.
+  function normalizar(v) {
+    return String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.\-]/g, '').toLowerCase();
+  }
+  function coincide(q, campos) {
+    if (!q) return true;
+    const texto = normalizar(campos.join(' '));
+    return normalizar(q).split(/\s+/).filter(Boolean).every((p) => texto.indexOf(p) !== -1);
+  }
+  // RUT chileno: validación con dígito verificador (módulo 11).
+  function rutLimpio(v) { return String(v == null ? '' : v).replace(/[.\s-]/g, '').toUpperCase(); }
+  function rutValido(v) {
+    const r = rutLimpio(v);
+    if (!/^\d{7,8}[0-9K]$/.test(r)) return false;
+    const cuerpo = r.slice(0, -1);
+    let suma = 0, factor = 2;
+    for (let i = cuerpo.length - 1; i >= 0; i--) { suma += Number(cuerpo[i]) * factor; factor = factor === 7 ? 2 : factor + 1; }
+    const resto = 11 - (suma % 11);
+    const esperado = resto === 11 ? '0' : resto === 10 ? 'K' : String(resto);
+    return r.slice(-1) === esperado;
+  }
+  function rutFormato(v) { const r = rutLimpio(v); return r.slice(0, -1) + '-' + r.slice(-1); }
   function uid() { return (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2)); }
   function diasDesde(fecha) { return fecha ? (Date.now() - new Date(fecha + 'T00:00:00').getTime()) / 86400000 : Infinity; }
   function esSeguimiento(c) {
@@ -1061,6 +1102,10 @@
     const msg = $e(entidad, 'msg');
     const btn = $e(entidad, 'btn');
     if (!d.nombre) { mostrar(msg, 'Escribe al menos el nombre.', 'error'); return; }
+    if (d.rut) {
+      if (!rutValido(d.rut)) { mostrar(msg, 'El RUT no parece válido. Revísalo o déjalo vacío.', 'error'); return; }
+      d.rut = rutFormato(d.rut);
+    }
     if (fotoNueva[entidad] && !$e(entidad, 'permiso').checked) {
       mostrar(msg, 'Antes de guardar, marca que la persona te dio permiso para tomar su foto.', 'error');
       return;
@@ -1187,7 +1232,7 @@
       (!$('c-estado').value || c.estado === $('c-estado').value) &&
       (!$('c-prio').value || c.prioridad === $('c-prio').value) &&
       (!seg || esSeguimiento(c)) &&
-      (!q || [c.nombre, c.cargo, c.empresa, c.sector, c.ciudad, c.pais, c.correo, c.notas].join(' ').toLowerCase().indexOf(q) !== -1)
+      coincide(q, [c.nombre, c.cargo, c.empresa, c.sector, c.ciudad, c.pais, c.correo, c.notas, c.rut, c.interes, c.proxima])
     );
     const orden = $('c-orden').value;
     const cmp = {
@@ -1319,6 +1364,8 @@
         ((c.pais || c.ciudad) ? '<div class="dato">📍 ' + esc([c.ciudad, c.pais].filter(Boolean).join(', ')) + '</div>' : '') +
         (c.sector ? '<div class="dato">Sector: ' + esc(c.sector) + '</div>' : '') +
         (c.como ? '<div class="dato">Nos conocimos: ' + esc(c.como) + '</div>' : '') +
+        (c.interes ? '<div class="dato">Interés: ' + esc(c.interes) + '</div>' : '') +
+        (c.proxima ? '<div class="dato">Próxima acción: ' + esc(c.proxima) + '</div>' : '') +
         (c.ultimo ? '<div class="dato">Último contacto: ' + esc(c.ultimo) + '</div>' : '') +
         (c.notas ? '<div class="dato">Notas: ' + esc(c.notas) + '</div>' : '') +
         '<div class="acciones">' + botonesComunes(c, 'contacto') + '</div></div>';
@@ -1445,7 +1492,7 @@
     const est = $('m-estado').value, rol = $('m-rol').value;
     const lista = datos.miembro.filter((m) =>
       (!est || m.estado === est) && (!rol || m.rol === rol) &&
-      (!q || [m.nombre, m.rol, m.cargo, m.institucion, m.area, m.ciudad, m.pais, m.correo].join(' ').toLowerCase().indexOf(q) !== -1)
+      coincide(q, [m.nombre, m.rol, m.cargo, m.institucion, m.area, m.ciudad, m.pais, m.correo, m.notas, m.rut])
     ).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
     const todos = datos.miembro;
     animar($('mTotal'), todos.length);
