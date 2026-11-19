@@ -711,7 +711,7 @@
       try {
         const res = await enviar({ entidad: entidad, accion: 'listar' });
         if (res.ok) datos[entidad] = fusionar(entidad, res.registros || []);
-        else if (res.error === 'clave') { bloquear('Tu clave ya no coincide con la del servidor. Vuelve a escribirla.'); return; }
+        else if (res.error === 'clave') { localStorage.removeItem(HUELLA_KEY); bloquear('Tu clave ya no coincide con la del servidor. Vuelve a escribirla.'); return; }
         else fallo = res.error;
       } catch (e) { fallo = 'Sin conexión: mostrando los últimos datos guardados.'; }
     }
