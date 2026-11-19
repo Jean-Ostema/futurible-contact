@@ -114,6 +114,8 @@
   .pie { text-align: center; font-size: .8rem; margin-top: 14px; color: var(--azul2); opacity: .85; }
   .estado-sync { font-size: .8rem; color: var(--gris); margin-left: 6px; }
   .pill-ok { color: #17663a; }
+.banner-edit { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #fff4d6; color: #8a5a00; padding: 10px 12px; border-radius: 12px; font-weight: 700; margin-bottom: 8px; }
+.banner-edit button { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -145,6 +147,7 @@
     <!-- REGISTRAR -->
     <section id="vistaRegistrar" class="card">
       <h2>Nuevo contacto</h2>
+      <div id="bannerEdit" class="banner-edit oculto"><span id="bannerTexto"></span><button id="cancelarEdit" class="sec" type="button">Cancelar</button></div>
       <form id="f" autocomplete="off">
         <div class="seccion">Identidad</div>
         <div class="grid2">
@@ -258,6 +261,7 @@
   const $ = (id) => document.getElementById(id);
   let contactos = [];
   const graficos = {};
+  let editando = null;
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
   function mostrar(el, texto, tipo) { el.textContent = texto; el.className = 'msg ' + tipo; }
@@ -304,17 +308,57 @@
   $('tabPanel').addEventListener('click', () => cambiarVista('panel'));
   $('actualizar').addEventListener('click', cargarPanel);
 
-  // ---------- Registro ----------
+  // ---------- Registro y edición ----------
+  function salirEdicion() {
+    editando = null;
+    $('f').reset();
+    $('prioridad').value = 'Media';
+    $('estado').value = 'Por contactar';
+    $('bannerEdit').classList.add('oculto');
+    $('btn').textContent = 'Guardar contacto';
+  }
+
+  function editar(fecha) {
+    const c = contactos.find((x) => x.fecha === fecha);
+    if (!c) return;
+    $('f').reset();
+    editando = fecha;
+    ['nombre', 'cargo', 'empresa', 'sector', 'correo', 'telefono', 'web', 'pais', 'ciudad', 'como', 'notas', 'ultimo'].forEach((k) => { $(k).value = c[k] || ''; });
+    $('tipo').value = c.tipo || '';
+    $('estado').value = c.estado || 'Por contactar';
+    $('prioridad').value = c.prioridad || 'Media';
+    $('bannerTexto').textContent = 'Editando a ' + c.nombre;
+    $('bannerEdit').classList.remove('oculto');
+    $('btn').textContent = 'Guardar cambios';
+    cambiarVista('registrar');
+  }
+
+  $('cancelarEdit').addEventListener('click', salirEdicion);
+  $('lista').addEventListener('click', function (e) {
+    const b = e.target.closest('[data-editar]');
+    if (b) editar(b.getAttribute('data-editar'));
+  });
+
   $('f').addEventListener('submit', async function (e) {
     e.preventDefault();
     const btn = $('btn');
     const datos = {};
     new FormData($('f')).forEach((v, k) => { datos[k] = limpio(v); });
     if (!datos.nombre) { mostrar($('msg'), 'Escribe al menos el nombre.', 'error'); return; }
-    btn.disabled = true; btn.textContent = 'Guardando…'; $('msg').className = 'msg';
+    const fechaEditada = editando;
+    btn.disabled = true; btn.textContent = fechaEditada ? 'Guardando cambios…' : 'Guardando…'; $('msg').className = 'msg';
     try {
-      const res = await enviar({ contacto: datos });
-      if (res.ok) {
+      const cuerpo = fechaEditada ? { accion: 'editar', fecha: fechaEditada, contacto: datos } : { contacto: datos };
+      const res = await enviar(cuerpo);
+      if (res.ok && fechaEditada) {
+        const i = contactos.findIndex((c) => c.fecha === fechaEditada);
+        if (i !== -1) contactos[i] = Object.assign({ fecha: fechaEditada }, datos);
+        guardarLocal();
+        salirEdicion();
+        mostrar($('msg'), 'Cambios guardados en la hoja de Drive.', 'ok');
+        prepararFiltros();
+        pintarTodo();
+      } else if (res.ok) {
         mostrar($('msg'), '¡Contacto guardado!', 'ok');
         contactos.push(Object.assign({ fecha: new Date().toISOString() }, datos));
         guardarLocal();
@@ -332,7 +376,7 @@
     } catch (err) {
       mostrar($('msg'), 'Sin conexión. Intenta de nuevo con internet.', 'error');
     } finally {
-      btn.disabled = false; btn.textContent = 'Guardar contacto';
+      btn.disabled = false; btn.textContent = editando ? 'Guardar cambios' : 'Guardar contacto';
     }
   });
 
@@ -520,7 +564,7 @@
         (c.como ? '<div class="dato">Nos conocimos: ' + esc(c.como) + '</div>' : '') +
         (c.ultimo ? '<div class="dato">Último contacto: ' + esc(c.ultimo) + '</div>' : '') +
         (c.notas ? '<div class="dato">Notas: ' + esc(c.notas) + '</div>' : '') +
-        '<div class="acciones">' +
+        '<div class="acciones"><button class="sec" data-editar="' + esc(c.fecha) + '">✏️ Editar</button>' +
           (tel ? '<a href="tel:' + esc(tel) + '">📞 Llamar</a><a href="' + esc(wa) + '" target="_blank" rel="noopener">💬 WhatsApp</a>' : '') +
           (limpio(c.correo) ? '<a href="mailto:' + esc(c.correo) + '">✉️ Correo</a>' : '') +
           (webUrl ? '<a href="' + esc(webUrl) + '" target="_blank" rel="noopener">🔗 Perfil</a>' : '') +
