@@ -152,6 +152,7 @@
     <label for="claveEntrar">Clave</label>
     <input id="claveEntrar" type="password" autocomplete="current-password">
     <button id="btnEntrar" class="principal" type="button">Entrar</button>
+    <button id="btnHuella" class="sec oculto" type="button" style="width:100%;margin-top:10px;padding:12px;">👆 Entrar con huella</button>
     <div id="msgEntrar" class="msg"></div>
   </div>
 
@@ -431,8 +432,9 @@
       </div>
     </section>
 
-    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v5</span><br>
+    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v6</span><br>
       <button id="actualizarApp" class="sec" type="button" style="margin-top:8px;">🔄 Actualizar aplicación</button>
+      <button id="activarHuella" class="sec" type="button" style="margin-top:8px;">👆 Activar huella en este equipo</button>
       <button id="cambiarClave" type="button">Cambiar clave</button></p>
   </div>
 </div>
@@ -448,6 +450,94 @@
   let claveActiva = '';     // solo vive en memoria mientras la app está abierta
   let llaveCifrado = null;  // llave AES derivada de la clave
   let ocultoDesde = 0;
+  const HUELLA_KEY = 'futurible-huella-v5';  // clave guardada, cifrada con la huella del equipo
+
+  // ---------- Huella (WebAuthn + PRF) ----------
+  function huellaDisponible() { return !!(window.PublicKeyCredential && navigator.credentials && window.isSecureContext); }
+
+  // Pide la huella y devuelve un secreto de 32 bytes ligado a este equipo.
+  async function secretoConHuella(idBytes, salPrf) {
+    const cred = await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: 'public-key', id: idBytes }],
+        userVerification: 'required',
+        timeout: 60000,
+        extensions: { prf: { eval: { first: salPrf } } }
+      }
+    });
+    const res = cred.getClientExtensionResults();
+    return res.prf && res.prf.results && res.prf.results.first ? new Uint8Array(res.prf.results.first) : null;
+  }
+
+  // Guarda la clave cifrada con la huella. Necesita estar dentro de la app (clave en memoria).
+  async function activarHuella() {
+    const msg = $('c-msg');
+    if (!huellaDisponible()) { mostrar(msg, 'Este navegador o equipo no permite usar la huella con esta app.', 'error'); return; }
+    if (!llaveCifrado || !claveActiva) { mostrar(msg, 'Entra con tu clave antes de activar la huella.', 'error'); return; }
+    if (!confirm('Se usará la huella de este equipo para entrar. Te pedirá la huella dos veces para activarla. ¿Continuar?')) return;
+    try {
+      const cred = await navigator.credentials.create({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          rp: { name: 'Futurible Contact' },
+          user: { id: crypto.getRandomValues(new Uint8Array(16)), name: 'futurible', displayName: 'Futurible Contact' },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+          timeout: 60000,
+          extensions: { prf: {} }
+        }
+      });
+      const idBytes = new Uint8Array(cred.rawId);
+      const salPrf = crypto.getRandomValues(new Uint8Array(32));
+      const secreto = await secretoConHuella(idBytes, salPrf);
+      if (!secreto) { mostrar(msg, 'Tu equipo no permite usar la huella con esta app. Sigue usando la clave.', 'error'); return; }
+      const llave = await crypto.subtle.importKey('raw', secreto, 'AES-GCM', false, ['encrypt', 'decrypt']);
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const bytes = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, llave, enc.encode(claveActiva)));
+      localStorage.setItem(HUELLA_KEY, JSON.stringify({ id: bytesA64(idBytes), prfSal: bytesA64(salPrf), iv: bytesA64(iv), data: bytesA64(bytes) }));
+      mostrar(msg, 'Huella activada en este equipo. Al abrir la app podrás entrar con ella.', 'ok');
+      mostrarPantalla();
+    } catch (e) {
+      mostrar(msg, 'No se activó la huella (' + (e.name === 'NotAllowedError' ? 'cancelada' : e.message) + ').', 'error');
+    }
+  }
+
+  // Entra usando la huella: la clave guardada se abre solo con el secreto de la huella.
+  async function entrarConHuella() {
+    const msg = $('msgEntrar');
+    const h = JSON.parse(localStorage.getItem(HUELLA_KEY) || 'null');
+    if (!h) return;
+    try {
+      const secreto = await secretoConHuella(a64Bytes(h.id), a64Bytes(h.prfSal));
+      if (!secreto) throw new Error('sin secreto');
+      const llave = await crypto.subtle.importKey('raw', secreto, 'AES-GCM', false, ['encrypt', 'decrypt']);
+      const clave = dec.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: a64Bytes(h.iv) }, llave, a64Bytes(h.data)));
+      await entrarCon(clave);
+    } catch (e) {
+      if (e.name === 'NotAllowedError') mostrar(msg, 'Huella cancelada. Puedes usar tu clave.', 'aviso');
+      else mostrar(msg, 'No se pudo con la huella. Usa tu clave.', 'error');
+    }
+  }
+
+  // Abre la app con una clave ya verificada (núcleo común de clave y huella).
+  async function entrarCon(clave) {
+    const bloque = leerBloque();
+    const sal = leerSal();
+    if (!bloque || !sal) throw new Error('sin datos');
+    const llave = await derivarLlave(clave, sal);
+    const contenido = await descifrarDatos(llave, bloque);
+    claveActiva = clave;
+    llaveCifrado = llave;
+    datos = Object.assign({ contacto: [], miembro: [] }, contenido.datos || {});
+    cola = contenido.cola || [];
+    localStorage.removeItem(INTENTOS_KEY);
+    $('claveEntrar').value = '';
+    mostrarPantalla();
+    abrirApp();
+  }
+  $('btnHuella').addEventListener('click', entrarConHuella);
+  $('activarHuella').addEventListener('click', activarHuella);
   const PALETA = ['#0a4ea3', '#3ec8d6', '#7c5cff', '#ff6fa3', '#ffb703', '#2fbf8f', '#f3722c', '#577590', '#90be6d', '#b5179e'];
   const ESTADOS_CONTACTO = ['Por contactar', 'Contactado', 'En conversación', 'Colaborador activo', 'Descartado'];
   const PRIORIDAD_ORDEN = { Alta: 0, Media: 1, Baja: 2 };
@@ -668,6 +758,8 @@
     const hayDatos = !!leerBloque();
     $('panelEntrar').classList.toggle('oculto', !hayDatos);
     $('panelCrear').classList.toggle('oculto', hayDatos);
+    $('btnHuella').classList.toggle('oculto', !(hayDatos && huellaDisponible() && localStorage.getItem(HUELLA_KEY)));
+    $('activarHuella').classList.toggle('oculto', !huellaDisponible());
     if (hayDatos) setTimeout(() => $('claveEntrar').focus(), 50);
   }
 
@@ -782,6 +874,7 @@
         cola = legado.cola;
       }
       await establecerClave(nueva);
+      localStorage.removeItem(HUELLA_KEY);  // la huella guardada era de la clave anterior
       if (primeraVez) LEGADO_KEYS.forEach((k) => localStorage.removeItem(k));
       return true;
     } catch (e) {
