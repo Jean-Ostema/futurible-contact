@@ -455,7 +455,7 @@
       </div>
     </section>
 
-    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v11</span><br>
+    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v12</span><br>
       <button id="actualizarApp" class="sec" type="button" style="margin-top:8px;">🔄 Actualizar aplicación</button>
       <button id="activarHuella" class="sec" type="button" style="margin-top:8px;">👆 Activar huella en este equipo</button>
       <button id="cambiarClave" type="button">Cambiar clave</button></p>
@@ -1182,6 +1182,21 @@
     }
   }
 
+  // Pasa un registro de contactos a miembros o al revés. Necesita internet.
+  async function cambiarTipo(entidad, id) {
+    const r = datos[entidad].find((x) => x.id === id);
+    if (!r) return;
+    const destino = entidad === 'contacto' ? 'miembro' : 'contacto';
+    const nombreDestino = destino === 'miembro' ? 'miembros' : 'contactos';
+    if (!confirm('¿Pasar a ' + r.nombre + ' a ' + nombreDestino + '?\n\nSe conservan su nombre, correo, teléfono, notas, RUT y foto. Los campos que no existen en la otra lista quedan vacíos, y la ficha original queda en la Papelera de la hoja.')) return;
+    if (!navigator.onLine) { alert('Necesitas conexión para cambiar el tipo.'); return; }
+    const res = await operar(entidad, 'cambiarTipo', { id: id }, true);
+    if (!res.ok) { alert('No se pudo cambiar: ' + res.error); return; }
+    if (editando[entidad] === id) salirEdicion(entidad);
+    await cargarTodo();
+    mostrarAviso(r.nombre + ' quedó en ' + nombreDestino + '.');
+  }
+
   async function eliminarRegistro(entidad, id) {
     const r = datos[entidad].find((x) => x.id === id);
     if (!r) return;
@@ -1201,7 +1216,9 @@
       const b = ev.target.closest('[data-accion]');
       if (!b) return;
       const id = b.getAttribute('data-id');
-      if (b.getAttribute('data-accion') === 'editar') editar(entidad, id);
+      const accion = b.getAttribute('data-accion');
+      if (accion === 'editar') editar(entidad, id);
+      else if (accion === 'cambiarTipo') cambiarTipo(entidad, id);
       else eliminarRegistro(entidad, id);
     };
   }
@@ -1364,6 +1381,7 @@
     return (tel ? '<a href="tel:' + esc(tel) + '">📞 Llamar</a><a href="' + esc(wa) + '" target="_blank" rel="noopener">💬 WhatsApp</a>' : '') +
       (limpio(r.correo) ? '<a href="mailto:' + esc(r.correo) + '">✉️ Correo</a>' : '') +
       (webUrl ? '<a href="' + esc(webUrl) + '" target="_blank" rel="noopener">🔗 Perfil</a>' : '') +
+      '<button class="sec" data-accion="cambiarTipo" data-id="' + esc(r.id) + '">🔄 Pasar a ' + (entidad === 'contacto' ? 'miembro' : 'contacto') + '</button>' +
       '<button class="sec" data-accion="editar" data-id="' + esc(r.id) + '">✏️ Editar</button>' +
       '<button class="sec peligro" data-accion="eliminar" data-id="' + esc(r.id) + '">🗑 Eliminar</button>';
   }
