@@ -455,7 +455,7 @@
       </div>
     </section>
 
-    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v10</span><br>
+    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v11</span><br>
       <button id="actualizarApp" class="sec" type="button" style="margin-top:8px;">🔄 Actualizar aplicación</button>
       <button id="activarHuella" class="sec" type="button" style="margin-top:8px;">👆 Activar huella en este equipo</button>
       <button id="cambiarClave" type="button">Cambiar clave</button></p>
@@ -467,6 +467,8 @@
   const BLOQUE_KEY = 'futurible-bloque-v4';   // datos cifrados con la clave
   const SAL_KEY = 'futurible-sal-v4';         // sal para derivar la llave
   const INTENTOS_KEY = 'futurible-intentos-v4';
+  const SESION_KEY = 'futurible-sesion-v11';   // clave guardada en este equipo para no pedirla cada vez
+  const SESION_MS = 12 * 60 * 60 * 1000;      // 12 horas
   const DATOS_KEY = 'futurible-datos-v3';     // solo para migrar versiones anteriores
   const COLA_KEY = 'futurible-cola-v1';       // solo para migrar versiones anteriores
   const LEGADO_KEYS = ['futurible-clave', 'futurible-datos-v2', 'futurible-datos-v3', 'futurible-cola-v1'];
@@ -553,6 +555,7 @@
     const llave = await derivarLlave(clave, sal);
     const contenido = await descifrarDatos(llave, bloque);
     claveActiva = clave;
+    guardarSesion(clave);
     llaveCifrado = llave;
     datos = Object.assign({ contacto: [], miembro: [] }, contenido.datos || {});
     cola = contenido.cola || [];
@@ -560,6 +563,14 @@
     $('claveEntrar').value = '';
     mostrarPantalla();
     abrirApp();
+  }
+
+  // Al abrir la app: si la sesión de 12 horas sigue vigente, entra sin pedir la clave.
+  async function restaurarSesion() {
+    const s = leerSesion();
+    if (!s || llaveCifrado || !leerBloque() || !leerSal()) return false;
+    try { await entrarCon(s.clave); return true; }
+    catch (e) { borrarSesion(); return false; }
   }
   const PALETA = ['#0a4ea3', '#3ec8d6', '#7c5cff', '#ff6fa3', '#ffb703', '#2fbf8f', '#f3722c', '#577590', '#90be6d', '#b5179e'];
   const ESTADOS_CONTACTO = ['Por contactar', 'Contactado', 'En conversación', 'Colaborador activo', 'Descartado'];
@@ -711,7 +722,7 @@
       try {
         const res = await enviar({ entidad: entidad, accion: 'listar' });
         if (res.ok) datos[entidad] = fusionar(entidad, res.registros || []);
-        else if (res.error === 'clave') { localStorage.removeItem(HUELLA_KEY); bloquear('Tu clave ya no coincide con la del servidor. Vuelve a escribirla.'); return; }
+        else if (res.error === 'clave') { localStorage.removeItem(HUELLA_KEY); borrarSesion(); bloquear('Tu clave ya no coincide con la del servidor. Vuelve a escribirla.'); return; }
         else fallo = res.error;
       } catch (e) { fallo = 'Sin conexión: mostrando los últimos datos guardados.'; }
     }
@@ -758,6 +769,15 @@
   }
 
   function leerSal() { const s = localStorage.getItem(SAL_KEY); return s ? a64Bytes(s) : null; }
+  function guardarSesion(clave) { localStorage.setItem(SESION_KEY, JSON.stringify({ clave: clave, hasta: Date.now() + SESION_MS })); }
+  function borrarSesion() { localStorage.removeItem(SESION_KEY); }
+  function leerSesion() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SESION_KEY) || 'null');
+      if (!s || !s.clave || Date.now() > s.hasta) { borrarSesion(); return null; }
+      return s;
+    } catch (e) { return null; }
+  }
   function leerBloque() { try { return JSON.parse(localStorage.getItem(BLOQUE_KEY) || 'null'); } catch (e) { return null; } }
 
   // Nueva sal y nueva llave: se usa al crear o cambiar la clave.
@@ -765,6 +785,7 @@
     const sal = crypto.getRandomValues(new Uint8Array(16));
     localStorage.setItem(SAL_KEY, bytesA64(sal));
     claveActiva = clave;
+    guardarSesion(clave);
     llaveCifrado = await derivarLlave(clave, sal);
     await guardando;
     guardando = Promise.resolve();
@@ -829,10 +850,10 @@
     cargarTodo();
   }
 
-  // Si la app pasa más de 2 minutos en segundo plano, vuelve a pedir la clave.
+  // Si la app pasa más de 15 minutos en segundo plano, vuelve a pedir la clave o la huella.
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { ocultoDesde = Date.now(); return; }
-    if (llaveCifrado && ocultoDesde && Date.now() - ocultoDesde > 900000) {
+    if (llaveCifrado && ocultoDesde && Date.now() - ocultoDesde > 900000 && !leerSesion()) {
       bloquear('Por seguridad, vuelve a escribir tu clave.');
     }
   });
@@ -876,6 +897,7 @@
       const llave = await derivarLlave(clave, sal);
       const contenido = await descifrarDatos(llave, bloque);
       claveActiva = clave;
+      guardarSesion(clave);
       llaveCifrado = llave;
       datos = Object.assign({ contacto: [], miembro: [] }, contenido.datos || {});
       cola = contenido.cola || [];
@@ -1509,7 +1531,7 @@
   // Borra solo lo cifrado de este equipo. Los contactos siguen en la hoja de Drive.
   $('resetLocal').addEventListener('click', () => {
     if (!confirm('Se borrarán los datos guardados en este equipo (los que estén sin enviar a Drive se perderán). Los contactos ya guardados siguen en la hoja de Drive. ¿Continuar?')) return;
-    [BLOQUE_KEY, SAL_KEY, HUELLA_KEY, INTENTOS_KEY, COLA_KEY, DATOS_KEY].forEach((k) => localStorage.removeItem(k));
+    [BLOQUE_KEY, SAL_KEY, HUELLA_KEY, INTENTOS_KEY, COLA_KEY, DATOS_KEY, SESION_KEY].forEach((k) => localStorage.removeItem(k));
     LEGADO_KEYS.forEach((k) => localStorage.removeItem(k));
     mostrarPantalla();
   });
@@ -1521,7 +1543,7 @@
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js'); });
   }
 
-  mostrarPantalla();
+  restaurarSesion().then((ok) => { if (!ok) mostrarPantalla(); });
 </script>
 </body>
 </html>
