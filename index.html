@@ -139,6 +139,10 @@
   .banner-edit { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #fff4d6; color: #8a5a00; padding: 10px 12px; border-radius: 12px; font-weight: 700; margin-bottom: 8px; }
   .banner-edit button { white-space: nowrap; }
   .pie button { background: none; border: 0; color: var(--azul2); text-decoration: underline; cursor: pointer; font-size: .8rem; }
+  .cab-plegable { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
+  .cab-plegable .flecha { margin-left: auto; transition: transform .2s; font-size: 18px; }
+  .cab-plegable.plegado .flecha { transform: rotate(-90deg); }
+  .lista-plegada { display: none; }
 </style>
 </head>
 <body>
@@ -350,7 +354,7 @@
         </div>
 
         <div class="card">
-          <h2>Lista de contactos <small id="c-conteo"></small></h2>
+          <h2 class="cab-plegable" data-plegar="contacto-lista">Lista de contactos <small id="c-conteo"></small><span class="flecha">▾</span></h2>
           <div id="contacto-lista"></div>
         </div>
       </div>
@@ -449,13 +453,13 @@
         </div>
 
         <div class="card">
-          <h2>Lista de miembros <small id="m-conteo"></small></h2>
+          <h2 class="cab-plegable" data-plegar="miembro-lista">Lista de miembros <small id="m-conteo"></small><span class="flecha">▾</span></h2>
           <div id="miembro-lista"></div>
         </div>
       </div>
     </section>
 
-    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v12</span><br>
+    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v13</span><br>
       <button id="actualizarApp" class="sec" type="button" style="margin-top:8px;">🔄 Actualizar aplicación</button>
       <button id="activarHuella" class="sec" type="button" style="margin-top:8px;">👆 Activar huella en este equipo</button>
       <button id="cambiarClave" type="button">Cambiar clave</button></p>
@@ -1560,6 +1564,22 @@
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js'); });
   }
+
+  // Listas plegables: se pueden ocultar y mostrar. Recuerda si quedaron plegadas.
+  document.querySelectorAll('.cab-plegable').forEach((h) => {
+    const destino = document.getElementById(h.getAttribute('data-plegar'));
+    const clave = 'futurible-plegado-' + h.getAttribute('data-plegar');
+    const aplicar = (plegado) => {
+      destino.classList.toggle('lista-plegada', plegado);
+      h.classList.toggle('plegado', plegado);
+    };
+    aplicar(localStorage.getItem(clave) === '1');
+    h.addEventListener('click', () => {
+      const nuevo = !destino.classList.contains('lista-plegada');
+      aplicar(nuevo);
+      localStorage.setItem(clave, nuevo ? '1' : '0');
+    });
+  });
 
   restaurarSesion().then((ok) => { if (!ok) mostrarPantalla(); });
 </script>
