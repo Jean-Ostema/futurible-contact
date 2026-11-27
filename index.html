@@ -154,6 +154,8 @@
     <h2>🔒 Futurible Contact</h2>
     <p class="dato" style="margin:0 0 6px;">Escribe tu clave para entrar. Sin la clave, los datos de este equipo no se pueden ver.</p>
     <div id="bloqueClave">
+      <label for="usuarioEntrar">Correo de acceso</label>
+      <input id="usuarioEntrar" type="email" autocomplete="username" inputmode="email" value="">
       <label for="claveEntrar">Clave</label>
       <input id="claveEntrar" type="password" autocomplete="current-password">
       <button id="btnEntrar" class="principal" type="button">Entrar</button>
@@ -239,12 +241,7 @@
           <div class="grid2">
             <div><label for="contacto-nombre">Nombre completo <span class="req">*</span></label><input id="contacto-nombre" name="nombre" required></div>
             <div><label for="contacto-tipo">Tipo de contacto</label>
-              <select id="contacto-tipo" name="tipo">
-                <option value="">Selecciona…</option>
-                <option>Profesor o académico</option><option>Emprendedor</option><option>Empresario o inversionista</option>
-                <option>Patrocinador</option><option>Colaborador</option><option>Mentor</option>
-                <option>Medio de comunicación</option><option>Estudiante</option><option>Otro</option>
-              </select></div>
+              <input id="contacto-tipo" name="tipo" list="dl-tipo" placeholder="Elige o escribe uno nuevo" autocomplete="off"><datalist id="dl-tipo"></datalist></div>
             <div><label for="contacto-cargo">Cargo</label><input id="contacto-cargo" name="cargo"></div>
             <div><label for="contacto-empresa">Empresa u organización</label><input id="contacto-empresa" name="empresa"></div>
             <div><label for="contacto-sector">Sector o área</label><input id="contacto-sector" name="sector" placeholder="Ej: educación, tecnología, salud"></div>
@@ -273,11 +270,7 @@
           <div class="grid2">
             <div><label for="contacto-rut">RUT (opcional)</label><input id="contacto-rut" name="rut" placeholder="12.345.678-5"></div>
             <div><label for="contacto-interes">Interés principal</label>
-              <select id="contacto-interes" name="interes">
-                <option value="">Selecciona…</option><option>Emprendimiento</option><option>Tecnología</option>
-                <option>Desarrollo personal</option><option>Formación para grupos</option>
-                <option>Donación o patrocinio</option><option>Otro</option>
-              </select></div>
+              <input id="contacto-interes" name="interes" list="dl-interes" placeholder="Elige o escribe uno nuevo" autocomplete="off"><datalist id="dl-interes"></datalist></div>
           </div>
           <label for="contacto-proxima">Próxima acción (qué hacer y para cuándo)</label>
           <input id="contacto-proxima" name="proxima" placeholder="Ej: llamar el 5 de diciembre">
@@ -354,6 +347,15 @@
         </div>
 
         <div class="card">
+          <div class="enlace-caja" style="margin-bottom:14px;">
+            <button id="btnCrearEnlace" class="sec" type="button">🔗 Crear link para formulario</button>
+            <div id="enlaceZona" class="oculto" style="margin-top:10px;">
+              <p class="dato" style="margin:0 0 6px;">Copia este link y envíaselo a la persona. Sirve una sola vez. Ella rellena el formulario y los datos llegan aquí como contacto nuevo.</p>
+              <input id="enlaceUrl" readonly>
+              <button id="btnCopiarEnlace" class="principal" type="button" style="margin-top:8px;">📋 Copiar link</button>
+              <p id="enlaceMsg" class="dato" style="margin:6px 0 0;"></p>
+            </div>
+          </div>
           <h2 class="cab-plegable" data-plegar="contacto-lista">Lista de contactos <small id="c-conteo"></small><span class="flecha">▾</span></h2>
           <div id="contacto-lista"></div>
         </div>
@@ -459,7 +461,7 @@
       </div>
     </section>
 
-    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v13</span><br>
+    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v14</span><br>
       <button id="actualizarApp" class="sec" type="button" style="margin-top:8px;">🔄 Actualizar aplicación</button>
       <button id="activarHuella" class="sec" type="button" style="margin-top:8px;">👆 Activar huella en este equipo</button>
       <button id="cambiarClave" type="button">Cambiar clave</button></p>
@@ -472,7 +474,7 @@
   const SAL_KEY = 'futurible-sal-v4';         // sal para derivar la llave
   const INTENTOS_KEY = 'futurible-intentos-v4';
   const SESION_KEY = 'futurible-sesion-v11';   // clave guardada en este equipo para no pedirla cada vez
-  const SESION_MS = 12 * 60 * 60 * 1000;      // 12 horas
+  const SESION_MS = 30 * 24 * 60 * 60 * 1000;  // 30 días
   const DATOS_KEY = 'futurible-datos-v3';     // solo para migrar versiones anteriores
   const COLA_KEY = 'futurible-cola-v1';       // solo para migrar versiones anteriores
   const LEGADO_KEYS = ['futurible-clave', 'futurible-datos-v2', 'futurible-datos-v3', 'futurible-cola-v1'];
@@ -649,7 +651,7 @@
       r = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(Object.assign({ clave: claveUsar || claveActiva }, cuerpo))
+        body: JSON.stringify(Object.assign({ clave: claveUsar || claveActiva, usuario: localStorage.getItem('futurible-usuario') || '' }, cuerpo))
       });
     } catch (e) { e.esRed = true; throw e; }
     try { return await r.json(); } catch (e) { throw new Error('La hoja respondió algo inesperado. Revisa la publicación de Apps Script.'); }
@@ -726,7 +728,7 @@
       try {
         const res = await enviar({ entidad: entidad, accion: 'listar' });
         if (res.ok) datos[entidad] = fusionar(entidad, res.registros || []);
-        else if (res.error === 'clave') { localStorage.removeItem(HUELLA_KEY); borrarSesion(); bloquear('Tu clave ya no coincide con la del servidor. Vuelve a escribirla.'); return; }
+        else if (res.error === 'clave') { localStorage.removeItem(HUELLA_KEY); borrarSesion(); bloquear('Tu correo o tu clave no coinciden con el servidor. Vuelve a escribirlos.'); return; }
         else fallo = res.error;
       } catch (e) { fallo = 'Sin conexión: mostrando los últimos datos guardados.'; }
     }
@@ -887,6 +889,8 @@
   async function intentarEntrar() {
     const msg = $('msgEntrar');
     const clave = $('claveEntrar').value;
+    const usuarioTxt = ($('usuarioEntrar').value || '').trim().toLowerCase();
+    if (usuarioTxt) localStorage.setItem('futurible-usuario', usuarioTxt);
     if (!clave) { mostrar(msg, 'Escribe tu clave.', 'error'); return; }
     const intentos = JSON.parse(localStorage.getItem(INTENTOS_KEY) || '{"n":0,"hasta":0}');
     if (intentos.hasta > Date.now()) {
@@ -1239,7 +1243,19 @@
     sel.innerHTML = '<option value="">' + titulo + '</option>' + valores.map((v) => '<option' + (v === valorActual ? ' selected' : '') + '>' + esc(v) + '</option>').join('');
     if (valorActual && valores.indexOf(valorActual) === -1) sel.value = '';
   }
+  // Sugerencias para tipo e interés: las opciones base más las que ya escribiste en tus contactos.
+  const SUG_TIPO = ['Profesor o académico', 'Emprendedor', 'Empresario o inversionista', 'Patrocinador', 'Colaborador', 'Mentor', 'Medio de comunicación', 'Estudiante', 'Otro'];
+  const SUG_INTERES = ['Emprendimiento', 'Tecnología', 'Desarrollo personal', 'Formación para grupos', 'Donación o patrocinio', 'Otro'];
+  function llenarSugerencias() {
+    const pares = [['dl-tipo', SUG_TIPO, 'tipo'], ['dl-interes', SUG_INTERES, 'interes']];
+    pares.forEach(([id, base, campo]) => {
+      const todas = Array.from(new Set(base.concat(valoresUnicos(campo)))).sort((a, b) => a.localeCompare(b, 'es'));
+      $(id).innerHTML = todas.map((v) => '<option value="' + esc(v) + '">').join('');
+    });
+  }
+
   function prepararFiltros() {
+    llenarSugerencias();
     const act = { tipo: $('c-tipo').value, pais: $('c-pais').value, ciudad: $('c-ciudad').value, estado: $('c-estado').value, prio: $('c-prio').value };
     llenar('c-tipo', 'Todos los tipos', valoresUnicos('tipo'), act.tipo);
     llenar('c-pais', 'Todos los países', valoresUnicos('pais'), act.pais);
@@ -1579,6 +1595,27 @@
       aplicar(nuevo);
       localStorage.setItem(clave, nuevo ? '1' : '0');
     });
+  });
+
+  // Botón para crear el link del formulario (un solo uso).
+  $('btnCrearEnlace').addEventListener('click', async () => {
+    if (!navigator.onLine) { alert('Necesitas conexión para crear el link.'); return; }
+    const btn = $('btnCrearEnlace');
+    btn.disabled = true;
+    try {
+      const r = await enviar({ entidad: 'contacto', accion: 'crearEnlace' });
+      if (!r.ok) { alert('No se pudo crear el link: ' + (r.error || 'error')); return; }
+      $('enlaceUrl').value = r.url;
+      $('enlaceZona').classList.remove('oculto');
+      $('enlaceMsg').textContent = '';
+    } catch (e) { alert('No se pudo crear el link. Revisa tu conexión.'); }
+    finally { btn.disabled = false; }
+  });
+  $('btnCopiarEnlace').addEventListener('click', async () => {
+    const url = $('enlaceUrl').value;
+    try { await navigator.clipboard.writeText(url); }
+    catch (e) { $('enlaceUrl').select(); document.execCommand('copy'); }
+    $('enlaceMsg').textContent = '✓ Link copiado. Ya puedes pegarlo y enviarlo.';
   });
 
   restaurarSesion().then((ok) => { if (!ok) mostrarPantalla(); });
