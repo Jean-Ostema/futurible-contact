@@ -165,12 +165,24 @@
     <p class="dato" style="margin:14px 0 0;text-align:center;">¿No recuerdas tu clave?
       <button id="resetLocal" type="button" style="background:none;border:0;color:var(--azul);text-decoration:underline;cursor:pointer;font-weight:700;">Borrar datos de este equipo y crear una clave nueva</button></p>
     <div id="msgEntrar" class="msg"></div>
+    <p class="dato" style="margin:12px 0 0;text-align:center;">
+      <button id="abrirCorreo" type="button" style="background:none;border:0;color:var(--azul);text-decoration:underline;cursor:pointer;font-weight:700;">Registrar o cambiar mi correo de acceso</button></p>
+    <div id="panelCorreo" class="oculto" style="margin-top:12px;">
+      <label for="correoNuevo">Mi correo de acceso</label>
+      <input id="correoNuevo" type="email" autocomplete="email" inputmode="email">
+      <label for="claveCorreo">Clave actual</label>
+      <input id="claveCorreo" type="password" autocomplete="current-password">
+      <button id="btnGuardarCorreo" class="principal" type="button">Guardar correo</button>
+      <div id="msgCorreo" class="msg"></div>
+    </div>
   </div>
 
   <!-- Crear clave: primera vez en este equipo o después de borrar los datos -->
   <div id="panelCrear" class="card oculto" style="max-width:460px;margin:30px auto;">
     <h2>🔐 Crear tu clave</h2>
     <p class="dato" style="margin:0 0 6px;">Elige una clave de al menos 8 caracteres. Se pedirá cada vez que abras la app. Para este paso necesitas la clave que usabas hasta ahora.</p>
+    <label for="correoCrear">Mi correo de acceso</label>
+    <input id="correoCrear" type="email" autocomplete="email" inputmode="email">
     <label for="claveActualCrear">Clave actual (la que usabas hasta ahora)</label>
     <input id="claveActualCrear" type="password" autocomplete="off">
     <label for="claveNueva">Clave nueva</label>
@@ -461,7 +473,7 @@
       </div>
     </section>
 
-    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v14</span><br>
+    <p class="pie">Datos sincronizados con la hoja "Futurible Contactos" de tu Drive · versión <span id="versionApp">v15</span><br>
       <button id="actualizarApp" class="sec" type="button" style="margin-top:8px;">🔄 Actualizar aplicación</button>
       <button id="activarHuella" class="sec" type="button" style="margin-top:8px;">👆 Activar huella en este equipo</button>
       <button id="cambiarClave" type="button">Cambiar clave</button></p>
@@ -971,7 +983,43 @@
     }
   }
 
+  // Guarda el correo de acceso en el servidor (con la clave actual) y lo usa para sincronizar.
+  async function guardarCorreo(correo, clave, msg) {
+    const c = String(correo || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) { mostrar(msg, 'Escribe un correo válido.', 'error'); return false; }
+    if (!clave) { mostrar(msg, 'Escribe tu clave actual.', 'error'); return false; }
+    if (!navigator.onLine) { mostrar(msg, 'Necesitas internet para guardar el correo.', 'error'); return false; }
+    try {
+      const r = await enviar({ accion: 'cambiarCorreo', nuevoCorreo: c }, clave);
+      if (r.error === 'clave') { mostrar(msg, 'La clave no es correcta.', 'error'); return false; }
+      if (!r.ok) { mostrar(msg, 'No se guardó el correo: ' + (r.error || 'error desconocido'), 'error'); return false; }
+      localStorage.setItem('futurible-usuario', c);
+      return true;
+    } catch (e) {
+      mostrar(msg, 'No se pudo conectar. Intenta de nuevo con internet.', 'error');
+      return false;
+    }
+  }
+
+  $('abrirCorreo').addEventListener('click', () => {
+    $('panelCorreo').classList.toggle('oculto');
+    $('correoNuevo').value = localStorage.getItem('futurible-usuario') || '';
+    $('msgCorreo').className = 'msg';
+  });
+  $('btnGuardarCorreo').addEventListener('click', async () => {
+    const btn = $('btnGuardarCorreo');
+    btn.disabled = true;
+    const ok = await guardarCorreo($('correoNuevo').value, $('claveCorreo').value, $('msgCorreo'));
+    btn.disabled = false;
+    if (!ok) return;
+    $('usuarioEntrar').value = localStorage.getItem('futurible-usuario');
+    $('claveCorreo').value = '';
+    mostrar($('msgCorreo'), 'Correo guardado. Ahora entra con este correo y tu clave.', 'ok');
+  });
+
   $('btnCrear').addEventListener('click', async () => {
+    const correoOk = await guardarCorreo($('correoCrear').value, $('claveActualCrear').value, $('msgCrear'));
+    if (!correoOk) return;
     const ok = await cambiarClaveCompleta($('claveActualCrear').value, $('claveNueva').value, $('claveRepetir').value, $('msgCrear'), $('btnCrear'), true);
     if (!ok) return;
     ['claveActualCrear', 'claveNueva', 'claveRepetir'].forEach((id) => { $(id).value = ''; });
